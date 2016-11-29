@@ -50,16 +50,21 @@ class ItemCollection extends Collection {
      */
     public function hasConditions()
     {
-        if( ! isset($this['conditions']) ) return false;
-        if( is_array($this['conditions']) )
-        {
-            return count($this['conditions']) > 0;
-        }
         
-        $conditionInstance = "Charterhousetech\\shoppingCart\\CartCondition";
-        if( $this['conditions'] instanceof $conditionInstance ) return true;
+        $conditionCollectionInstans = "Charterhousetech\\shoppingCart\\CartConditionCollection";
 
-        return false;
+            if (! $this ['conditions'] instanceof $conditionCollectionInstans) {
+                # TODO: set expetion
+                throw new \Exception('condition item must be an instance of \Charterhousetech\shoppingCart\CartConditionCollection\'');
+            }
+           
+           return $this['conditions']->count() > 0;
+        
+        // echo "string";
+        // $conditionInstance = "Charterhousetech\\shoppingCart\\CartCondition";
+        // if( $this['conditions'] instanceof $conditionInstance ) return true;
+
+        // return false;
     }
 
     /**
@@ -75,27 +80,31 @@ class ItemCollection extends Collection {
 
         if( $this->hasConditions() )
         {
-            if( is_array($this->conditions) )
-            {
-                foreach($this->conditions as $condition)
-                {
-                    if( $condition->getTarget() === 'item' )
-                    {
-                        ( $processed > 0 ) ? $toBeCalculated = $newPrice : $toBeCalculated = $originalPrice;
-                        $newPrice = $condition->applyCondition($toBeCalculated);
-                        $processed++;
-                    }
-                }
-            }
-            else
-            {
-                if( $this['conditions']->getTarget() === 'item' )
-                {
-                    $newPrice = $this['conditions']->applyCondition($originalPrice);
-                }
-            }
+           if (Helpers::isMultiArray($this->conditions->toArray()) ) {
+             
+              foreach ($this->conditions as $key => $cond) 
+              {
 
-            return Helpers::formatValue($newPrice, $formatted, $this->config);
+                $cond = new CartCondition($cond);
+               if( $cond->getTarget() === 'item' )
+                {
+                    ( $processed > 0 ) ? $toBeCalculated = $newPrice : $toBeCalculated = $originalPrice;
+                    $newPrice = $cond->applyCondition($toBeCalculated);
+                    $processed++;
+                }
+              }
+              
+           }
+           else
+           {
+                $cond = new CartCondition($this->conditions->toArray());
+               
+                if( $cond->getTarget() === 'item' )
+                {
+                    $newPrice = $cond->applyCondition($originalPrice);
+                }
+           }
+           return Helpers::formatValue($newPrice, $formatted, $this->config);
         }
         return Helpers::formatValue($originalPrice, $formatted, $this->config);
     }

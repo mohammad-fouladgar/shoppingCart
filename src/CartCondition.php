@@ -9,7 +9,7 @@ class CartCondition {
     /**
      * @var array
      */
-    private $args;
+    private $args ; 
 
     /**
      * the parsed raw value of the condition
@@ -34,15 +34,21 @@ class CartCondition {
      */
     public function __construct(array $args)
     {
-        $this->args = $args;
-
-        if( Helpers::isMultiArray($args) )
-        {
-            throw new InvalidConditionException('Multi dimensional array is not supported.');
-        }
-        else
-        {
-            $this->validate($this->args);
+        if (count($args)) {
+            
+            if( Helpers::isMultiArray($args) )
+            {
+                // throw new InvalidConditionException('Multi dimensional array is not supported.');
+                foreach ($args as $arg) {
+                    $this->args = $arg;
+                    $this->validate($this->args);
+                }
+            }
+            else
+            {
+                $this->args = $args;
+                $this->validate($this->args);
+            }
         }
     }
 

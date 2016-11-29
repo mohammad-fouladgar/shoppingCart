@@ -28,14 +28,17 @@ class Helpers {
      */
     public static function isMultiArray($array, $recursive = false)
     {
+
         if( $recursive )
         {
             return (count($array) == count($array, COUNT_RECURSIVE)) ? false : true;
         }
         else
         {
+
             foreach ($array as $k => $v)
             {
+            
                 if (is_array($v))
                 {
                     return true;

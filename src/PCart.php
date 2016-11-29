@@ -149,8 +149,8 @@ class PCart {
             }
             return $this;
         }
-
-        // validate data
+        // validate data and conditions
+        new CartCondition($conditions); // for validate conditions
         $item = $this->validate([
             'id'         => $id,
             'name'       => $name,
@@ -159,6 +159,7 @@ class PCart {
             'attributes' => new ItemAttributeCollection($attributes),
             'conditions' => new CartConditionCollection($conditions),
         ]);
+
         // get the cart
         $cart = $this->getContent();
        
@@ -183,7 +184,7 @@ class PCart {
         $cart = $this->getContent();
 
         $item = $cart->pull($id);
-
+        // dump($item->toJson());
         foreach($data as $key => $value) {
 
             if( $key == 'quantity' )
@@ -210,6 +211,13 @@ class PCart {
             elseif( $key == 'attributes' )
             {
                 $item[$key] = new ItemAttributeCollection($value);
+            }
+            elseif ( $key == 'conditions' ) 
+            {
+                // for validate condition
+                new CartCondition($value);
+                $item[$key] =  new CartConditionCollection($value);
+                    
             }
             else
             {
@@ -608,7 +616,7 @@ class PCart {
      * @param $item
      * @return bool
      */
-    public function itemHasConditions($item)
+    protected function itemHasConditions($item)
     {
         if( ! isset($item['conditions']) ) return false;
 
