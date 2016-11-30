@@ -162,7 +162,7 @@ class PCart {
 
         // get the cart
         $cart = $this->getContent();
-       
+
         if( $cart->has($id) ) {
             $this->update($id, $item);
         } else {
@@ -214,10 +214,13 @@ class PCart {
             }
             elseif ( $key == 'conditions' ) 
             {
+                if ( $value instanceof CartConditionCollection ) {
+                    $value = $value->toArray();
+                }
+
                 // for validate condition
                 new CartCondition($value);
                 $item[$key] =  new CartConditionCollection($value);
-                    
             }
             else
             {
@@ -234,33 +237,33 @@ class PCart {
      * add condition on an existing item on the cart
      *
      * @param int|string $productId
-     * @param CartCondition $itemCondition
+     * @param array $itemCondition
      * @return $this
      */
-    public function addItemCondition($productId, $itemCondition)
+    public function addItemCondition($productId,array $itemCondition)
     {
         if( $product = $this->get($productId) )
         {
-            $conditionInstance = "\\Charterhousetech\\shoppingCart\\CartCondition";
-
-            if( $itemCondition instanceof $conditionInstance )
+            $itemConditionTempHolder = $product->get('conditions')->toArray();
+            
+            if(! count($itemConditionTempHolder))
             {
-                $itemConditionTempHolder = $product['conditions'];
-
-                if( is_array($itemConditionTempHolder) )
-                {
-                    array_push($itemConditionTempHolder, $itemCondition);
-                }
-                else
-                {
-                    $itemConditionTempHolder = $itemCondition;
-                }
-
-                $this->update($productId, [
-                    'conditions' => $itemConditionTempHolder 
-                ]);
+                $itemConditionTempHolder = $itemCondition;
             }
+            elseif (Helpers::isMultiArray($itemConditionTempHolder))
+            {
+                array_push($itemConditionTempHolder,$itemCondition);
+            }
+            else
+            {
+               $itemConditionTempHolder = [$itemConditionTempHolder, $itemCondition];
+            }
+            
+            $this->update($productId, [
+                   'conditions' => $itemConditionTempHolder 
+                ]);
         }
+
         return $this;
     }
 
@@ -280,48 +283,51 @@ class PCart {
     }
 
     /**
-     * clear cart
+     * clear cart and cart conditions
      */
     public function clear()
     {
 
         $this->session->put($this->sessionKeyCartItems,[]);
+
+        $this->clearCartConditions();
     }
 
     /**
      * add a condition on the cart
      *
-     * @param CartCondition|array $condition
+     * @param multiArray|array $condition
      * @return $this
-     * @throws InvalidConditionException
      */
     public function condition($condition)
     {
-        if( is_array($condition) )
-        {
-            foreach($condition as $c)
-            {
-                $this->condition($c);
-            }
+        if (Helpers::isMultiArray($condition)) {
+           foreach ($condition as  $c) {
 
-            return $this;
+               $this->condition($c);
+           }
+           return $this;
         }
-
-        if( ! $condition instanceof CartCondition ) throw new InvalidConditionException('Argument 1 must be an instance of \'Charterhousetech\shoppingCart\CartCondition\'');
+        
+        $conditionCollection = new CartConditionCollection($condition);
+        $condition           = new CartCondition($condition);
 
         $conditions = $this->getConditions();
 
+        if ( $condition->getTarget() !== 'subtotal') return $this;
+       
         if($condition->getOrder() == 0) {
             $last = $conditions->last();
-            $condition->setOrder(!is_null($last) ? $last->getOrder() + 1 : 1);
+            $condition->setOrder(! is_null($last) ? $last->getOrder() + 1 : 1);
         }
+      
+        $conditions->put($condition->getName(), $conditionCollection);
 
-        $conditions->put($condition->getName(), $condition);
-
-        $conditions = $conditions->sortBy(function ($condition, $key) {
-            return $condition->getOrder();
+         $conditions = $conditions->sortBy(function ($cond, $key) {
+            $cond = new CartCondition($cond->toArray());
+            return $cond->getOrder();
         });
-
+       
         $this->saveConditions($conditions);
 
         return $this;
@@ -355,9 +361,10 @@ class PCart {
     */
     public function getConditionsByType($type)
     {
-        return $this->getConditions()->filter(function(CartCondition $condition) use ($type)
+        return $this->getConditions()->filter(function($cond) use ($type)
         {
-            return $condition->getType() == $type;
+            $cond = new CartCondition($cond->toArray());
+           return $cond->getType() == $type;
         });
     }
 
@@ -368,9 +375,10 @@ class PCart {
      */
     public function removeConditionsByType($type)
     {
-        $this->getConditionsByType($type)->each(function($condition)
+        $this->getConditionsByType($type)->each(function($cond)
         {
-            $this->removeCartCondition($condition->getName());
+            $cond = new CartCondition($cond->toArray());
+            $this->removeCartCondition($cond->getName());
         });
     }
     /**
@@ -400,16 +408,18 @@ class PCart {
         {
             return false;
         }
-
+       
         if( $this->itemHasConditions($item) )
         {
-            $tempConditionsHolder = $item['conditions'];
+            $tempConditionsHolder = $item->get('conditions');
 
-            if( is_array($tempConditionsHolder) )
-            {
-                foreach($tempConditionsHolder as $k => $condition)
+            if (Helpers::isMultiArray($tempConditionsHolder)) {
+
+                 foreach($tempConditionsHolder as $k => $cond)
                 {
-                    if( $condition->getName() == $conditionName )
+                    $cond = new CartCondition($cond);
+                    
+                    if( $cond->getName() == $conditionName )
                     {
                         unset($tempConditionsHolder[$k]);
                     }
@@ -419,19 +429,16 @@ class PCart {
             }
             else
             {
-                $conditionInstance = "Charterhousetech\\shoppingCart\\CartCondition";
-
-                if ($item['conditions'] instanceof $conditionInstance)
+                $tempConditionsHolder = new CartCondition($tempConditionsHolder->toArray());
+                if ($tempConditionsHolder->getName() == $conditionName)
                 {
-                    if ($tempConditionsHolder->getName() == $conditionName)
-                    {
-                        $item['conditions'] = [];
-                    }
+                    $item['conditions'] = [];
                 }
             }
         }
 
         $this->update($itemId, ['conditions' => $item['conditions'] ]);
+        
         return true;
     }
 
@@ -494,11 +501,14 @@ class PCart {
         $process = 0;
 
         $conditions = $this->getConditions();
-
+       
         if( ! $conditions->count() ) return $subTotal;
 
         $conditions->each(function($cond) use ($subTotal, &$newTotal, &$process)
         {
+            
+            $cond = new CartCondition($cond->toArray());
+           
             if( $cond->getTarget() === 'subtotal' )
             {
                 ( $process > 0 ) ? $toBeCalculated = $newTotal : $toBeCalculated = $subTotal;
@@ -607,7 +617,7 @@ class PCart {
      */
     protected function saveConditions($conditions)
     {
-        $this->session->put($this->sessionKeyCartConditions, $conditions);
+       $this->session->put($this->sessionKeyCartConditions, $conditions);
     }
 
     /**
@@ -619,17 +629,8 @@ class PCart {
     protected function itemHasConditions($item)
     {
         if( ! isset($item['conditions']) ) return false;
-
-        if( is_array($item['conditions']) )
-        {
-            return count($item['conditions']) > 0;
-        }
         
-        $conditionInstance = "Charterhousetech\\shoppingCart\\CartCondition";
-
-        if( $item['conditions'] instanceof $conditionInstance ) return true;
-
-        return false;
+        return $item->get('conditions')->count() > 0;
     }
 
     /**
@@ -710,16 +711,25 @@ class PCart {
      */
     public function store($identifier)
     {
-        $content = $this->getContent();
-     
+        $content        = $this->getContent();
+        $cartConditions = $this->getConditions();
+        
+        if (! $content->count() ) return;
+            
+           // todo : if exists update contentData 
         if ($this->storedCartWithIdentifierExists($identifier)) {
             throw new CartAlreadyStoredException("A cart with identifier {$identifier} was already stored.");
         }
 
+        $contentData = [
+            'cartCollection'=> $content,
+            'cartConditions' => $cartConditions
+        ];
+
         $this->getConnection()->table($this->getTableName())->insert([
             'identifier' => $identifier,
-            'instance' => $this->getInstanceName(),
-            'content' => json_encode($content)
+            'instance'   => $this->getInstanceName(),
+            'content'    => json_encode($contentData)
         ]);
     }
 
@@ -737,26 +747,30 @@ class PCart {
 
         $stored = $this->getConnection()->table($this->getTableName())
             ->where('identifier', $identifier)->first();
-             
+       
         $storedContent = json_decode($stored->content,true);
- // dump($storedContent);
-        $currentInstance = $this->getInstanceName();
+        
+        $content = $storedContent['cartCollection'];
+        $cartConditions = $storedContent['cartConditions'];
 
-         $this->instanceName = $stored->instance;
+        // $originalContent = $this->getContent();
+        // $originalConditions = $this->getConditions();
 
-        $content = $this->getContent();
-       dd($storedContent);
-        foreach ($storedContent as $cartItem) {
-            // dump($cartItem);
-            // $content->put($cartItem->id, $cartItem);
+        try {
+            // clear cart and cart conditions
+            $this->clear();
+
+            $this->add($content);
+            $this->condition($cartConditions);
+
+            return true;
+        
+        } catch (\Exception $e) {
+            // TODO: if do event exeption...
+            throw $e;
         }
-         dump($content);
 
-        // $this->session->put($this->instance, $content);
-        // $this->instanceName = $currentInstance;
-
-        // $this->getConnection()->table($this->getTableName())
-        //     ->where('identifier', $identifier)->delete();
+        return false;
     }
 
     /**
