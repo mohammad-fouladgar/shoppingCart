@@ -1,12 +1,12 @@
 <?php 
-
 namespace Charterhousetech\shoppingCart;
+
 use Charterhousetech\shoppingCart\Exceptions\InvalidConditionException;
 use Charterhousetech\shoppingCart\Exceptions\InvalidItemException;
 use Charterhousetech\shoppingCart\Exceptions\CartAlreadyStoredException;
 use Charterhousetech\shoppingCart\Helpers\Helpers;
 use Illuminate\Database\DatabaseManager;
-use Illuminate\Database\Eloquent\Model;
+//use Illuminate\Database\Eloquent\Model;
 
 class PCart {
 
@@ -184,7 +184,7 @@ class PCart {
         $cart = $this->getContent();
 
         $item = $cart->pull($id);
-        // dump($item->toJson());
+
         foreach($data as $key => $value) {
 
             if( $key == 'quantity' )
@@ -711,26 +711,68 @@ class PCart {
      */
     public function store($identifier)
     {
-        $content        = $this->getContent();
-        $cartConditions = $this->getConditions();
+        $content = $this->getContent();
         
-        if (! $content->count() ) return;
-            
-           // todo : if exists update contentData 
-        if ($this->storedCartWithIdentifierExists($identifier)) {
-            throw new CartAlreadyStoredException("A cart with identifier {$identifier} was already stored.");
-        }
-
         $contentData = [
-            'cartCollection'=> $content,
-            'cartConditions' => $cartConditions
+            'cartCollection' => $content,
+            'cartConditions' => $this->getConditions()
         ];
 
+        if (! $content->count() ) return;
+            
+        if ($this->storedCartWithIdentifierExists($identifier)) {
+            // throw new CartAlreadyStoredException("A cart with identifier {$identifier} was already stored.");
+            $this->dbUpdate($identifier,$contentData);
+        }
+        else
+        {
+            $this->dbInsert($identifier,$contentData);
+        }
+    }
+
+    /**
+     * insert a new row in table
+     * 
+     * @param  string $identifier  
+     * @param  array $contentData
+     * @return void            
+     */
+    private function dbInsert($identifier,$contentData)
+    {
         $this->getConnection()->table($this->getTableName())->insert([
             'identifier' => $identifier,
             'instance'   => $this->getInstanceName(),
             'content'    => json_encode($contentData)
         ]);
+    }
+
+    /**
+     * update exists cart
+     * 
+     * @param  string $identifier  
+     * @param  array $contentData
+     * @return void
+     */
+    private function dbUpdate($identifier,$contentData)
+    {
+         $this->getConnection()
+              ->table($this->getTableName())
+              ->where('identifier', $identifier)
+              ->update(['content'=>json_encode($contentData)]);
+    }
+
+    /**
+     * delete cart by identifier
+     * 
+     * @param  string $identifier
+     * @return void
+     */
+    public function dbFree($identifier)
+    {
+        $this->getConnection()
+              ->table($this->getTableName())
+              ->where('identifier', $identifier)
+              ->delete();
     }
 
     /**
@@ -779,7 +821,10 @@ class PCart {
      */
     private function storedCartWithIdentifierExists($identifier)
     {
-        return $this->getConnection()->table($this->getTableName())->where('identifier', $identifier)->exists();
+        return $this->getConnection()
+                    ->table($this->getTableName())
+                    ->where('identifier', $identifier)
+                    ->exists();
     }
 
     /**
