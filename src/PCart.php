@@ -781,18 +781,29 @@ class PCart {
               ->update(['content'=>json_encode($contentData),'user_id'=>$userId]);
     }
 
-    /**
-     * delete cart by identifier
-     * 
-     * @param  string $identifier
-     * @return void
-     */
-    public function dbFree($identifier)
+   /**
+    * delete cart from table
+    * 
+    * @param  string $identifier 
+    * @param  integer $userId     
+    * @return bool
+    */
+    public function dbFree($identifier=null,$userId=0)
     {
-        $this->getConnection()
-              ->table($this->getTableName())
-              ->where('identifier', $identifier)
-              ->delete();
+        $q = $this->getConnection()->table($this->getTableName());
+
+        if ($userId > 0)
+        {
+            
+            $q->whereUserId($userId);
+        }
+        else
+        {
+            
+            $q->whereIdentifier($identifier);
+        }
+
+       return $q->delete();
     }
 
     /**
@@ -839,6 +850,7 @@ class PCart {
      */
     public function restoreByIdentifier($identifier)
     {
+
         if( ! $this->storedCartWithIdentifierExists($identifier)) return false;
        
         $stored = $this->getConnection()
@@ -951,5 +963,14 @@ class PCart {
     public function getIdentifier()
     {
         return $this->session->get($this->sessionKeyCartIdentifier);
+    }
+    /**
+     * remove identifire
+     * 
+     * @return void
+     */
+    public function removeIdentifire()
+    {
+        $this->session->put($this->sessionKeyCartIdentifier,null);
     }
 }

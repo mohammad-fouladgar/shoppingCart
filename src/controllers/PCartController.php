@@ -37,25 +37,26 @@ class PCartController extends Controller
 		// Set identifire
 		if( is_null($this->identifire = Cart::getIdentifier() ) )
 		{
-			$this->identifire = Cart::setIdentifier();
+
+			Cart::setIdentifier();
+			$this->identifire = Cart::getIdentifier();
 		}
 			
 	}
 	public function index()
 	{
-		// check login and identifire....
+		
+		
 		$shoppingcart = Cart::getContent();
-
+		
 		if (! $shoppingcart->count()) 
 		{
 			if ( $this->userId > 0 ) 
 			{
-
 				Cart::restoreByUserId($userId);
 			}
 			else
 			{
-
 				Cart::restoreByIdentifier($this->identifire);
 			}
 
@@ -88,5 +89,56 @@ class PCartController extends Controller
 		Cart::store($this->identifire,$this->userId);
 		
 		return  response()->json('Item is added successfully.');
+	}
+
+	/**
+	 * removes an item on cart by item ID
+	 * 
+	 * @param  int $itemId 
+	 * @return redirect
+	 */
+	public function remove($itemId)
+	{
+		Cart::remove($itemId);
+
+		if (Cart::getContent()->count() < 1)
+		{
+			return $this->clear();	
+		}
+
+		Cart::store($this->identifire,$this->userId);
+
+		return redirect()->route('cart.index');
+	}
+
+	/**
+	 * update item quantity
+	 * 
+	 * @param  Request $req [description]
+	 * @return [type]       [description]
+	 */
+	public function update(Request $req)
+	{
+		Cart::update($req->id,['quantity'=>['relative'=>false,'value'=>$req->quantity]]);
+		
+		Cart::store($this->identifire,$this->userId);
+		
+		return response()->json(["success" => true, "subtotal" => Cart::getTotal()]);
+	}
+	/**
+	 * clear shopping cart
+	 * 
+	 * @return [type] [description]
+	 */
+	public function clear()
+	{
+		// clear cart and conditions
+		Cart::clear();
+		// remove row from table
+		Cart::dbFree($this->identifire,$this->userId);
+		// remove identifier
+		Cart::removeIdentifire();
+
+		return redirect()->route('cart.index');
 	}
 }
