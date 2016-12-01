@@ -709,7 +709,7 @@ class PCart {
      * @param mixed $identifier
      * @return void
      */
-    public function store($identifier)
+    public function store($identifier,$userId =0)
     {
         $content = $this->getContent();
         
@@ -720,13 +720,32 @@ class PCart {
 
         if (! $content->count() ) return;
             
-        if ($this->storedCartWithIdentifierExists($identifier)) {
-            // throw new CartAlreadyStoredException("A cart with identifier {$identifier} was already stored.");
-            $this->dbUpdate($identifier,$contentData);
+
+        if ( $userId > 0)
+        {
+            if ($this->storedCartWithUserIdExists($userId))
+            {
+
+                $this->dbUpdate($identifier,$contentData,$userId);
+            }
+            else
+            {
+
+                $this->dbInsert($identifier,$contentData,$userId);
+            }
         }
         else
         {
-            $this->dbInsert($identifier,$contentData);
+            if ($this->storedCartWithIdentifierExists($identifier))
+            {
+
+                $this->dbUpdate($identifier,$contentData,$userId);
+            }
+            else
+            {
+            
+                $this->dbInsert($identifier,$contentData,$userId);
+            }
         }
     }
 
@@ -737,12 +756,13 @@ class PCart {
      * @param  array $contentData
      * @return void            
      */
-    private function dbInsert($identifier,$contentData)
+    private function dbInsert($identifier,$contentData,$userId=0)
     {
         $this->getConnection()->table($this->getTableName())->insert([
             'identifier' => $identifier,
             'instance'   => $this->getInstanceName(),
-            'content'    => json_encode($contentData)
+            'content'    => json_encode($contentData),
+            'user_id'    => $userId
         ]);
     }
 
@@ -753,12 +773,12 @@ class PCart {
      * @param  array $contentData
      * @return void
      */
-    private function dbUpdate($identifier,$contentData)
+    private function dbUpdate($identifier,$contentData,$userId)
     {
          $this->getConnection()
               ->table($this->getTableName())
               ->where('identifier', $identifier)
-              ->update(['content'=>json_encode($contentData)]);
+              ->update(['content'=>json_encode($contentData),'user_id'=>$userId]);
     }
 
     /**
@@ -776,27 +796,26 @@ class PCart {
     }
 
     /**
-     * Restore the cart with the given identifier.
+     * Restore the cart with the given userId.
      *
-     * @param mixed $identifier
-     * @return void
+     * @param int $userid
+     * @return bool
      */
-    public function restore($identifier)
+    public function restoreByUserId($userId)
     {
-        if( ! $this->storedCartWithIdentifierExists($identifier)) {
-            return;
-        }
+        if( $userId <=0 ) return false;
 
-        $stored = $this->getConnection()->table($this->getTableName())
-            ->where('identifier', $identifier)->first();
+        if( ! $this->storedCartWithUserIdExists($userId)) return false;
        
-        $storedContent = json_decode($stored->content,true);
-        
-        $content = $storedContent['cartCollection'];
-        $cartConditions = $storedContent['cartConditions'];
+        $stored = $this->getConnection()
+                        ->table($this->getTableName())
+                        ->whereUserId($userId)
+                        ->first();
 
-        // $originalContent = $this->getContent();
-        // $originalConditions = $this->getConditions();
+        $storedContent  = json_decode($stored->content,true);
+        
+        $content        = $storedContent['cartCollection'];
+        $cartConditions = $storedContent['cartConditions'];
 
         try {
             // clear cart and cart conditions
@@ -804,18 +823,51 @@ class PCart {
 
             $this->add($content);
             $this->condition($cartConditions);
-
-            return true;
-        
         } catch (\Exception $e) {
             // TODO: if do event exeption...
             throw $e;
         }
 
-        return false;
+        return true;
     }
 
     /**
+     * Restore the cart with the given userId.
+     *
+     * @param mixed $identifier
+     * @return void
+     */
+    public function restoreByIdentifier($identifier)
+    {
+        if( ! $this->storedCartWithIdentifierExists($identifier)) return false;
+       
+        $stored = $this->getConnection()
+                        ->table($this->getTableName())
+                        ->whereIdentifier($identifier)
+                        ->first();
+
+        $storedContent  = json_decode($stored->content,true);
+        
+        $content        = $storedContent['cartCollection'];
+        $cartConditions = $storedContent['cartConditions'];
+
+        try {
+            // clear cart and cart conditions
+            $this->clear();
+
+            $this->add($content);
+            $this->condition($cartConditions);
+        } catch (\Exception $e) {
+            // TODO: if do event exeption...
+            throw $e;
+        }
+
+        return true;
+    }
+
+    /**
+     * check exists identifier
+     * 
      * @param $identifier
      * @return bool
      */
@@ -823,7 +875,21 @@ class PCart {
     {
         return $this->getConnection()
                     ->table($this->getTableName())
-                    ->where('identifier', $identifier)
+                    ->whereIdentifier($identifier)
+                    ->exists();
+    }
+
+    /**
+     * check exists user
+     * 
+     * @param  [type] $userId [description]
+     * @return [type]         [description]
+     */
+    private function storedCartWithUserIdExists($userId)
+    {
+        return $this->getConnection()
+                    ->table($this->getTableName())
+                    ->where('user_id', $userId)
                     ->exists();
     }
 
@@ -876,8 +942,6 @@ class PCart {
     public function setIdentifier()
     {
         $this->session->put($this->sessionKeyCartIdentifier,$this->generateIdentifier());
-        
-        return $this;
     }
     /**
      * get the identifier session

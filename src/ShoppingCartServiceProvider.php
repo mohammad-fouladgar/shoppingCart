@@ -57,5 +57,14 @@ class ShoppingCartServiceProvider extends ServiceProvider
                  );
             });
 
+            # TODO : clear cart or (clear and dbfree) after logout
+            // $this->app['events']->listen(Logout::class, function () {
+
+            //    if($this->app['config']->get('cart.destroy_on_logout')) {
+            //         $this->app->make(SessionManager::class)->forget('cart');
+            //         TODO : cart->clear() or clear and cart->dbfree()
+            //     }
+            // });
+
     	}
 }
